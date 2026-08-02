@@ -389,47 +389,178 @@ function joinNow(){
 </script>
 
 <script>
-const TELEGRAM_URL = "https://t.me/+PMOaSKdxPWU4ZGRl";
+/* =========================================================================
+   UNIVERSAL TELEGRAM REDIRECT + TRACKING SCRIPT
+   Kisi bhi landing page me is <script> block ko paste karo.
+   Sirf neeche wala CONFIG object apne hisaab se badlo — baaki sab automatic hai.
 
-function trackAndRedirect(event) {
-  if (event) event.preventDefault();
+   Supports BOTH button patterns on the same page:
+     1) <a href="..." onclick="trackAndRedirect(event)">   (inline attribute)
+     2) <a href="..." class="cta-telegram">                (addEventListener, auto-bound)
+     3) <a href="..." data-tg-cta>                          (addEventListener, auto-bound)
 
-  if (typeof fbq !== 'undefined') {
-    fbq('track', 'Lead', {
-      value: '0.00',
-      currency: 'INR',
-      predicted_ltv: '0.00',
-    });
-  } else {
-    console.log('Pixel not loaded, but redirecting...');
+   Features:
+   - 15/20/etc second configurable countdown with auto-redirect
+   - Real-user detection (dwell time + scroll/move/touch signal) — filters
+     bot/instant clicks into a separate LowQualityClick event
+   - sessionStorage dedup — prevents double-firing on reload/back-forward
+   - Optional server-side CAPI call (same eventID as pixel, for dedup)
+   - Null-safe: won't throw errors if #countTxt or buttons are missing
+   ========================================================================= */
+
+var TG_CONFIG = {
+  telegramUrl: "https://t.me/+PMOaSKdxPWU4ZGRl",  // apna invite link daalo
+  countdownSeconds: 15,
+  timerElementId: "countTxt",           // is ID wala element ho to countdown dikhega, warna skip
+  timerTemplate: "Will be redirecting in {n} seconds....",
+  timerColor: "#dbe7ff",
+
+  minDwellMs: 2000,                      // is time se pehle click/redirect ko "low quality" maana jayega
+  requireInteractionSignal: true,        // scroll/move/touch signal zaroori ho to true rakho
+
+  leadEventName: "Lead",                 // Meta pixel event name for genuine leads
+  lowQualityEventName: "LowQualityClick",// custom event for filtered-out clicks
+  fireLeadOnAutoTimeout: false,          // auto-timeout par bhi Lead count karna ho to true karo
+
+  // CAPI (server-side) — chhod do blank agar setup nahi kiya abhi
+  capiEndpoint: "",                      // e.g. "/api/capi/lead" — blank rakhne se CAPI call skip ho jayega
+};
+
+(function () {
+
+  // ---------- Real-user signal tracking ----------
+  var pageLoadTime = Date.now();
+  var hasScrolled = false;
+  var hasMoved = false;
+  var moveDistance = 0;
+  var lastX = null, lastY = null;
+
+  function trackMove(x, y) {
+    if (lastX !== null) { moveDistance += Math.abs(x - lastX) + Math.abs(y - lastY); }
+    lastX = x; lastY = y;
+    if (moveDistance > 15) hasMoved = true;
+  }
+  window.addEventListener('scroll', function () { hasScrolled = true; }, { once: true, passive: true });
+  document.addEventListener('mousemove', function (e) { trackMove(e.clientX, e.clientY); });
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches && e.touches[0]) trackMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchstart', function () { hasMoved = true; }, { once: true, passive: true });
+
+  function isLikelyRealUser() {
+    var timeOnPage = Date.now() - pageLoadTime;
+    if (timeOnPage < TG_CONFIG.minDwellMs) return false;
+    if (TG_CONFIG.requireInteractionSignal && !hasScrolled && !hasMoved) return false;
+    return true;
   }
 
-  setTimeout(function () {
-    window.location.href = TELEGRAM_URL;
-  }, 300);
-}
+  // ---------- Dedup (sessionStorage) ----------
+  var DEDUP_KEY = "tg_lead_fired_" + TG_CONFIG.telegramUrl;
+  function alreadyFiredThisSession() {
+    try { return sessionStorage.getItem(DEDUP_KEY) === "1"; }
+    catch (e) { return false; } // private mode etc. — fail open
+  }
+  function markFiredThisSession() {
+    try { sessionStorage.setItem(DEDUP_KEY, "1"); } catch (e) {}
+  }
 
-let time = 08;
-const timerTextTpl = "Will be redirecting in {n} seconds....";
-const countTxt = document.getElementById('countTxt');
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : undefined;
+  }
 
-function paintTimer() {
-  if (!countTxt) return;
-  countTxt.innerHTML = timerTextTpl.replace(
-    '{n}',
-    '<span style="color:#ffd700;font-weight:bold;">' + time + '</span>'
-  );
-}
-paintTimer();
+  // ---------- Conversion firing ----------
+  var hasFired = false;
 
-const countdown = setInterval(function () {
-  time--;
+  function fireConversion(isAutoTimeout) {
+    if (hasFired || alreadyFiredThisSession()) return;
+
+    var realUser = isLikelyRealUser();
+    var shouldFireLead = realUser && (!isAutoTimeout || TG_CONFIG.fireLeadOnAutoTimeout);
+
+    if (typeof fbq === 'undefined') {
+      console.warn('fbq is not defined. Pixel tracking skipped.');
+    } else if (shouldFireLead) {
+      var eventId = 'tg_lead_' + Date.now();
+      fbq('track', TG_CONFIG.leadEventName, {
+        content_name: 'Telegram Community',
+        value: 0,
+        currency: 'INR'
+      }, { eventID: eventId });
+
+      if (TG_CONFIG.capiEndpoint) {
+        fetch(TG_CONFIG.capiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventId: eventId,
+            eventSourceUrl: window.location.href,
+            fbp: getCookie('_fbp'),
+            fbc: getCookie('_fbc')
+          }),
+          keepalive: true
+        }).catch(function (err) { console.error('CAPI send failed:', err); });
+      }
+    } else if (typeof fbq !== 'undefined') {
+      fbq('trackCustom', TG_CONFIG.lowQualityEventName);
+    }
+
+    hasFired = true;
+    markFiredThisSession();
+  }
+
+  // ---------- Redirect handlers ----------
+  function trackAndRedirect(event) {
+    if (event) event.preventDefault();
+    if (countdown) clearInterval(countdown);
+    fireConversion(false); // real click — never treated as auto-timeout
+    setTimeout(function () {
+      window.location.href = TG_CONFIG.telegramUrl;
+    }, 300);
+  }
+  // expose globally so inline onclick="trackAndRedirect(event)" keeps working
+  window.trackAndRedirect = trackAndRedirect;
+
+  function autoRedirect() {
+    fireConversion(true); // auto-timeout
+    window.location.href = TG_CONFIG.telegramUrl;
+  }
+
+  // ---------- Countdown ----------
+  var time = TG_CONFIG.countdownSeconds;
+  var countTxt = document.getElementById(TG_CONFIG.timerElementId);
+  var countdown = null;
+
+  function paintTimer() {
+    if (!countTxt) return;
+    countTxt.innerHTML = TG_CONFIG.timerTemplate.replace(
+      '{n}',
+      '<span style="color:' + TG_CONFIG.timerColor + ';font-weight:bold;">' + time + '</span>'
+    );
+  }
   paintTimer();
-  if (time <= 0) {
-    clearInterval(countdown);
-    trackAndRedirect();
-  }
-}, 1000);
+
+  countdown = setInterval(function () {
+    time--;
+    paintTimer();
+    if (time <= 0) {
+      clearInterval(countdown);
+      autoRedirect();
+    }
+  }, 1000);
+
+  // ---------- Auto-bind buttons that use class/data-attribute pattern ----------
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.cta-telegram, [data-tg-cta]').forEach(function (btn) {
+      // avoid double-binding if the element ALSO has an inline onclick
+      if (btn.hasAttribute('onclick')) return;
+      btn.addEventListener('click', function (e) {
+        trackAndRedirect(e);
+      });
+    });
+  });
+
+})();
 </script>
 
 
