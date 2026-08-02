@@ -211,6 +211,13 @@ body{
   padding:12px;
 }
 
+/* TIMER */
+.timer{
+  margin-top:14px;
+  font-size:13px;
+  color:#9fb3c8;
+}
+
 /* ✅ PC ONLY IMPROVEMENT */
 @media(min-width:768px){
 
@@ -241,7 +248,7 @@ fbq('init', '1417016173819397');
 fbq('track', 'PageView');
 </script>
 <noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id=14170161738193970&ev=PageView&noscript=1"
+src="https://www.facebook.com/tr?id=1417016173819397&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Meta Pixel Code -->
 <div class="container">
@@ -262,9 +269,7 @@ src="https://www.facebook.com/tr?id=14170161738193970&ev=PageView&noscript=1"
 
 <!-- PROFILE -->
 <div class="profile">
-  <img src="https://github.com/itssky72001-ui/CA-Nitinn/releases/download/nitin/CA.Nitin.jpg
-
-">
+  <img src="https://github.com/itssky72001-ui/CA-Nitinn/releases/download/nitin/CA.Nitin.jpg">
 
   <svg class="verified" viewBox="0 0 24 24">
     <defs>
@@ -310,10 +315,13 @@ src="https://www.facebook.com/tr?id=14170161738193970&ev=PageView&noscript=1"
   <div class="box">🆓 FREE ACCESS</div>
 </div>
 
-<!-- CTA -->
+<!-- CTA : FIX -> ab trackAndRedirect(event) call ho raha hai, joinNow() nahi -->
 <div class="cta">
-  <button onclick="joinNow()">🚀 JOIN CHANNEL — IT'S FREE</button>
+  <button onclick="trackAndRedirect(event)">🚀 JOIN CHANNEL — IT'S FREE</button>
 </div>
+
+<!-- countdown display for the universal script -->
+<div class="timer" id="countTxt"></div>
 
 <!-- TRUST -->
 <div class="trust">
@@ -346,10 +354,10 @@ Disclaimer: This Platform only for educational and informational purposes only. 
 </div>
 
 </div>
+</div>
 
 <script>
-
-// SAME JS
+// SAME JS — ticker / watch-count / social-proof popup (decorative, unrelated to tracking)
 function updateMarket(){
   let items=["NIFTY","BANKNIFTY","BTC"];
   let text="";
@@ -380,50 +388,28 @@ function showPopup(){
   setTimeout(()=>{popup.style.display="none";},3000);
 }
 setInterval(showPopup,7000);
-
-function joinNow(){
-  window.location.href="https://t.me/+PMOaSKdxPWU4ZGRl";
-}
-
-</script>
 </script>
 
 <script>
 /* =========================================================================
    UNIVERSAL TELEGRAM REDIRECT + TRACKING SCRIPT
-   Kisi bhi landing page me is <script> block ko paste karo.
-   Sirf neeche wala CONFIG object apne hisaab se badlo — baaki sab automatic hai.
-
-   Supports BOTH button patterns on the same page:
-     1) <a href="..." onclick="trackAndRedirect(event)">   (inline attribute)
-     2) <a href="..." class="cta-telegram">                (addEventListener, auto-bound)
-     3) <a href="..." data-tg-cta>                          (addEventListener, auto-bound)
-
-   Features:
-   - 15/20/etc second configurable countdown with auto-redirect
-   - Real-user detection (dwell time + scroll/move/touch signal) — filters
-     bot/instant clicks into a separate LowQualityClick event
-   - sessionStorage dedup — prevents double-firing on reload/back-forward
-   - Optional server-side CAPI call (same eventID as pixel, for dedup)
-   - Null-safe: won't throw errors if #countTxt or buttons are missing
    ========================================================================= */
 
 var TG_CONFIG = {
-  telegramUrl: "https://t.me/+PMOaSKdxPWU4ZGRl",  // apna invite link daalo
+  telegramUrl: "https://t.me/+PMOaSKdxPWU4ZGRl",
   countdownSeconds: 15,
-  timerElementId: "countTxt",           // is ID wala element ho to countdown dikhega, warna skip
+  timerElementId: "countTxt",
   timerTemplate: "Will be redirecting in {n} seconds....",
   timerColor: "#dbe7ff",
 
-  minDwellMs: 2000,                      // is time se pehle click/redirect ko "low quality" maana jayega
-  requireInteractionSignal: true,        // scroll/move/touch signal zaroori ho to true rakho
+  minDwellMs: 2000,
+  requireInteractionSignal: true,
 
-  subscribeEventName: "subscribe",                 // Meta pixel event name for genuine subscribes
-  lowQualityEventName: "LowQualityClick",// custom event for filtered-out clicks
-  firesubscribeOnAutoTimeout: true,          // auto-timeout par bhi subscribe count karna ho to true karo
+  subscribeEventName: "Subscribe",       // FIX: capital S — matches Meta's standard event
+  lowQualityEventName: "LowQualityClick",
+  firesubscribeOnAutoTimeout: true,
 
-  // CAPI (server-side) — chhod do blank agar setup nahi kiya abhi
-  capiEndpoint: "",                      // e.g. "/api/capi/subscribe" — blank rakhne se CAPI call skip ho jayega
+  capiEndpoint: "",
 };
 
 (function () {
@@ -458,7 +444,7 @@ var TG_CONFIG = {
   var DEDUP_KEY = "tg_subscribe_fired_" + TG_CONFIG.telegramUrl;
   function alreadyFiredThisSession() {
     try { return sessionStorage.getItem(DEDUP_KEY) === "1"; }
-    catch (e) { return false; } // private mode etc. — fail open
+    catch (e) { return false; }
   }
   function markFiredThisSession() {
     try { sessionStorage.setItem(DEDUP_KEY, "1"); } catch (e) {}
@@ -513,16 +499,15 @@ var TG_CONFIG = {
   function trackAndRedirect(event) {
     if (event) event.preventDefault();
     if (countdown) clearInterval(countdown);
-    fireConversion(false); // real click — never treated as auto-timeout
+    fireConversion(false);
     setTimeout(function () {
       window.location.href = TG_CONFIG.telegramUrl;
     }, 300);
   }
-  // expose globally so inline onclick="trackAndRedirect(event)" keeps working
   window.trackAndRedirect = trackAndRedirect;
 
   function autoRedirect() {
-    fireConversion(true); // auto-timeout
+    fireConversion(true);
     window.location.href = TG_CONFIG.telegramUrl;
   }
 
@@ -552,7 +537,6 @@ var TG_CONFIG = {
   // ---------- Auto-bind buttons that use class/data-attribute pattern ----------
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.cta-telegram, [data-tg-cta]').forEach(function (btn) {
-      // avoid double-binding if the element ALSO has an inline onclick
       if (btn.hasAttribute('onclick')) return;
       btn.addEventListener('click', function (e) {
         trackAndRedirect(e);
@@ -564,4 +548,4 @@ var TG_CONFIG = {
 </script>
 
 </body>
-</html>>>
+</html>
