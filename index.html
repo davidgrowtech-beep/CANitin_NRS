@@ -418,12 +418,12 @@ var TG_CONFIG = {
   minDwellMs: 2000,                      // is time se pehle click/redirect ko "low quality" maana jayega
   requireInteractionSignal: true,        // scroll/move/touch signal zaroori ho to true rakho
 
-  leadEventName: "Subscribe",                 // Meta pixel event name for genuine leads
+  subscribeEventName: "subscribe",                 // Meta pixel event name for genuine subscribes
   lowQualityEventName: "LowQualityClick",// custom event for filtered-out clicks
-  fireLeadOnAutoTimeout: false,          // auto-timeout par bhi Lead count karna ho to true karo
+  firesubscribeOnAutoTimeout: false,          // auto-timeout par bhi subscribe count karna ho to true karo
 
   // CAPI (server-side) — chhod do blank agar setup nahi kiya abhi
-  capiEndpoint: "",                      // e.g. "/api/capi/lead" — blank rakhne se CAPI call skip ho jayega
+  capiEndpoint: "",                      // e.g. "/api/capi/subscribe" — blank rakhne se CAPI call skip ho jayega
 };
 
 (function () {
@@ -455,7 +455,7 @@ var TG_CONFIG = {
   }
 
   // ---------- Dedup (sessionStorage) ----------
-  var DEDUP_KEY = "tg_lead_fired_" + TG_CONFIG.telegramUrl;
+  var DEDUP_KEY = "tg_subscribe_fired_" + TG_CONFIG.telegramUrl;
   function alreadyFiredThisSession() {
     try { return sessionStorage.getItem(DEDUP_KEY) === "1"; }
     catch (e) { return false; } // private mode etc. — fail open
@@ -476,13 +476,13 @@ var TG_CONFIG = {
     if (hasFired || alreadyFiredThisSession()) return;
 
     var realUser = isLikelyRealUser();
-    var shouldFireLead = realUser && (!isAutoTimeout || TG_CONFIG.fireLeadOnAutoTimeout);
+    var shouldFiresubscribe = realUser && (!isAutoTimeout || TG_CONFIG.firesubscribeOnAutoTimeout);
 
     if (typeof fbq === 'undefined') {
       console.warn('fbq is not defined. Pixel tracking skipped.');
-    } else if (shouldFireLead) {
-      var eventId = 'tg_lead_' + Date.now();
-      fbq('track', TG_CONFIG.leadEventName, {
+    } else if (shouldFiresubscribe) {
+      var eventId = 'tg_subscribe_' + Date.now();
+      fbq('track', TG_CONFIG.subscribeEventName, {
         content_name: 'Telegram Community',
         value: 0,
         currency: 'INR'
@@ -562,7 +562,6 @@ var TG_CONFIG = {
 
 })();
 </script>
-
 
 </body>
 </html>>>
